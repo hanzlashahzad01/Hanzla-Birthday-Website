@@ -44,3 +44,12 @@ If you are developing a production application, we recommend using TypeScript wi
 ## Wish Page & Share this link to anyone
 
 <img width="1919" height="1030" alt="7" src="https://github.com/user-attachments/assets/04c79d8d-0401-4d50-84a3-50c2560c5b2f" />
+
+## 📬 Connect with Me
+I'm always open to discussing new projects, creative ideas, or opportunities to be part of your visions.
+
+Email: hanzlashahzadhanzlashahzad@gmail.com
+
+LinkedIn: https://www.linkedin.com/in/hanzla-shahzad
+
+GitHub: https://github.com/hanzlashahzad01/hanzlashahzad01
