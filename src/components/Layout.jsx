@@ -1,70 +1,185 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Volume2, VolumeX } from 'lucide-react';
+import { VolumeX } from 'lucide-react';
 
 const Layout = ({ children }) => {
     const [isPlaying, setIsPlaying] = useState(false);
-    const audioRef = useRef(new Audio());
+    const audioRef = useRef(null);
+    const canvasRef = useRef(null);
 
-    // Music Tracks (Using reliable CodeSkulptor/Google assets for demo)
     const musicTracks = {
-        party: 'https://commondatastorage.googleapis.com/codeskulptor-demos/riceracer_assets/music/race2.ogg', // Upbeat
-        cute: 'https://commondatastorage.googleapis.com/codeskulptor-demos/pyman_assets/intromusic.ogg', // Playful/8-bit
-        elegant: 'https://commondatastorage.googleapis.com/codeskulptor-demos/riceracer_assets/music/start.ogg', // Calm/Short loop (Placeholder)
-        romantic: 'https://codeskulptor-demos.commondatastorage.googleapis.com/GalaxyInvaders/theme_01.mp3', // Space/Synth (Placeholder)
-        funny: 'https://commondatastorage.googleapis.com/codeskulptor-assets/sounddogs/soundtrack.mp3', // Funky
+        party: 'https://commondatastorage.googleapis.com/codeskulptor-demos/riceracer_assets/music/race2.ogg',
+        cute: 'https://commondatastorage.googleapis.com/codeskulptor-demos/pyman_assets/intromusic.ogg',
+        elegant: 'https://commondatastorage.googleapis.com/codeskulptor-demos/riceracer_assets/music/start.ogg',
+        romantic: 'https://codeskulptor-demos.commondatastorage.googleapis.com/GalaxyInvaders/theme_01.mp3',
+        funny: 'https://commondatastorage.googleapis.com/codeskulptor-assets/sounddogs/soundtrack.mp3',
         default: 'https://commondatastorage.googleapis.com/codeskulptor-demos/riceracer_assets/music/win.ogg'
     };
 
-    useEffect(() => {
-        // Initial Setup
+    const [currentTheme, setCurrentTheme] = useState('party');
+
+    // Initialize audio once
+    if (!audioRef.current) {
+        audioRef.current = new Audio();
         audioRef.current.loop = true;
         audioRef.current.volume = 0.4;
+        audioRef.current.src = musicTracks.party;
+    }
 
-        // Attempt play on mount (often blocked, but worth trying)
-        const initMusic = () => {
-            if (!audioRef.current.src) audioRef.current.src = musicTracks.party;
-        };
-        initMusic();
-
-        // Unlock Audio Context on ANY click in the document
-        const unlockAudio = () => {
-            if (audioRef.current.paused && !isPlaying) {
-                audioRef.current.play().then(() => {
-                    setIsPlaying(true);
-                }).catch(e => console.log("Waiting for interaction..."));
+    // Update src when theme changes
+    useEffect(() => {
+        const trackUrl = musicTracks[currentTheme] || musicTracks.default;
+        if (audioRef.current && audioRef.current.src !== trackUrl) {
+            const wasPlaying = !audioRef.current.paused;
+            audioRef.current.src = trackUrl;
+            if (wasPlaying) {
+                audioRef.current.play().catch(e => console.log("Theme change track play failed:", e));
             }
-            // Remove listener after first successful interaction
-            if (!audioRef.current.paused) {
-                window.removeEventListener('click', unlockAudio);
-                window.removeEventListener('touchstart', unlockAudio);
+        }
+    }, [currentTheme]);
+
+    // Canvas Particles System
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        let animationFrameId;
+        let particles = [];
+
+        const resizeCanvas = () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        };
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        const themeEmojis = {
+            party: ['🎈', '🎉', '🥳', '🎁', '🍰', '✨'],
+            cute: ['🌸', '🐱', '🧁', '🧸', '🍬', '⭐'],
+            elegant: ['✨', '⭐', '💎', '👑', '💫', '🥂'],
+            romantic: ['❤️', '💖', '🌹', '💋', '🧸', '💌'],
+            funny: ['😜', '🤣', '🤡', '🍌', '🕺', '🦄'],
+            default: ['✨', '⭐', '🎈']
+        };
+
+        class Particle {
+            constructor() {
+                this.reset();
+                this.y = Math.random() * canvas.height; // Spread initially
+            }
+
+            reset() {
+                this.x = Math.random() * canvas.width;
+                this.size = Math.random() * 12 + 12; // 12px to 24px
+                this.opacity = Math.random() * 0.4 + 0.3; // 0.3 to 0.7 opacity
+                this.speedX = Math.random() * 0.8 - 0.4; // Drift side to side
+                
+                const emojis = themeEmojis[currentTheme] || themeEmojis.default;
+                this.emoji = emojis[Math.floor(Math.random() * emojis.length)];
+
+                if (currentTheme === 'elegant') {
+                    // Falling gold glitter
+                    this.speedY = Math.random() * 0.4 + 0.2;
+                    this.y = -20;
+                } else if (currentTheme === 'party' || currentTheme === 'cute' || currentTheme === 'romantic') {
+                    // Floating upwards
+                    this.speedY = -(Math.random() * 0.5 + 0.3);
+                    this.y = canvas.height + 20;
+                } else {
+                    // Floating randomly
+                    this.speedY = Math.random() * 0.6 - 0.3;
+                    this.y = Math.random() * canvas.height;
+                }
+                
+                this.rotation = Math.random() * Math.PI * 2;
+                this.spinSpeed = Math.random() * 0.02 - 0.01;
+                this.wiggleSpeed = Math.random() * 0.02 + 0.01;
+                this.wiggleWidth = Math.random() * 1.2 + 0.4;
+                this.wiggleTimer = Math.random() * 100;
+            }
+
+            update() {
+                this.x += this.speedX + Math.sin(this.wiggleTimer) * this.wiggleWidth;
+                this.y += this.speedY;
+                this.rotation += this.spinSpeed;
+                this.wiggleTimer += this.wiggleSpeed;
+
+                // Elegant theme gets starry sparkle effect
+                if (currentTheme === 'elegant') {
+                    this.opacity += Math.sin(this.wiggleTimer) * 0.03;
+                    if (this.opacity < 0.2) this.opacity = 0.2;
+                    if (this.opacity > 0.7) this.opacity = 0.7;
+                }
+
+                // Recycle particles
+                if (currentTheme === 'elegant' && this.y > canvas.height + 20) {
+                    this.reset();
+                } else if ((currentTheme === 'party' || currentTheme === 'cute' || currentTheme === 'romantic') && this.y < -20) {
+                    this.reset();
+                } else if (this.x < -20 || this.x > canvas.width + 20 || this.y < -20 || this.y > canvas.height + 20) {
+                    this.reset();
+                }
+            }
+
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.opacity;
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rotation);
+                ctx.font = `${this.size}px sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(this.emoji, 0, 0);
+                ctx.restore();
+            }
+        }
+
+        // Limit particles count dynamically for mobile devices
+        const maxParticles = Math.min(25, Math.floor((canvas.width * canvas.height) / 40000));
+        particles = Array.from({ length: maxParticles }, () => new Particle());
+
+        const animate = () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles.forEach(p => {
+                p.update();
+                p.draw();
+            });
+            animationFrameId = requestAnimationFrame(animate);
+        };
+        animate();
+
+        return () => {
+            window.removeEventListener('resize', resizeCanvas);
+            cancelAnimationFrame(animationFrameId);
+        };
+    }, [currentTheme]);
+
+    useEffect(() => {
+        // Document interaction trigger to play audio
+        const unlockAudio = () => {
+            if (audioRef.current && audioRef.current.paused) {
+                audioRef.current.play()
+                    .then(() => {
+                        setIsPlaying(true);
+                        window.removeEventListener('click', unlockAudio);
+                        window.removeEventListener('touchstart', unlockAudio);
+                    })
+                    .catch(e => console.log("Autoplay waiting for interaction..."));
             }
         };
 
         window.addEventListener('click', unlockAudio);
         window.addEventListener('touchstart', unlockAudio);
 
-        // Listen for custom start event (specific triggers)
         const handleStartMusic = () => {
-            if (!isPlaying) {
-                audioRef.current.play().catch(console.log);
-                setIsPlaying(true);
+            if (audioRef.current) {
+                audioRef.current.play()
+                    .then(() => setIsPlaying(true))
+                    .catch(e => console.log("Start music failed:", e));
             }
         };
 
-        // Listen for theme change to switch music
         const handleChangeTheme = (e) => {
-            const newTheme = e.detail;
-            if (musicTracks[newTheme]) {
-                const currentSrc = audioRef.current.src;
-                // Map theme to track or use default
-                const newSrc = musicTracks[newTheme] || musicTracks.default;
-
-                if (currentSrc !== newSrc) {
-                    audioRef.current.src = newSrc;
-                    // If it was playing, or we want it to play now
-                    audioRef.current.play().then(() => setIsPlaying(true)).catch(console.log);
-                }
-            }
+            setCurrentTheme(e.detail);
         };
 
         window.addEventListener('start-music', handleStartMusic);
@@ -75,13 +190,24 @@ const Layout = ({ children }) => {
             window.removeEventListener('touchstart', unlockAudio);
             window.removeEventListener('start-music', handleStartMusic);
             window.removeEventListener('change-theme', handleChangeTheme);
-            audioRef.current.pause();
-        }
-    }, [isPlaying]);
+        };
+    }, []);
+
+    // Pause audio when leaving the page entirely
+    useEffect(() => {
+        return () => {
+            if (audioRef.current) {
+                audioRef.current.pause();
+            }
+        };
+    }, []);
 
     const toggleMusic = () => {
+        if (!audioRef.current) return;
         if (audioRef.current.paused) {
-            audioRef.current.play().then(() => setIsPlaying(true)).catch(e => console.log("Play failed", e));
+            audioRef.current.play()
+                .then(() => setIsPlaying(true))
+                .catch(e => console.log("Toggle play failed:", e));
         } else {
             audioRef.current.pause();
             setIsPlaying(false);
@@ -90,13 +216,25 @@ const Layout = ({ children }) => {
 
     return (
         <div className="min-h-screen w-full relative overflow-x-hidden">
+            {/* Background Canvas Particles */}
+            <canvas ref={canvasRef} className="particles-canvas" />
+
             {/* Music Toggle (Fixed) */}
             <button
                 onClick={toggleMusic}
-                className="fixed top-4 right-4 z-50 p-3 bg-white/80 backdrop-blur-sm rounded-full shadow-lg hover:scale-110 transition-all"
+                className={`music-toggle-btn ${isPlaying ? 'playing' : ''}`}
                 aria-label="Toggle Music"
             >
-                {isPlaying ? <Volume2 className="w-6 h-6 text-pink-500" /> : <VolumeX className="w-6 h-6 text-gray-500" />}
+                {isPlaying ? (
+                    <div className="equalizer">
+                        <span className="eq-bar bar-1"></span>
+                        <span className="eq-bar bar-2"></span>
+                        <span className="eq-bar bar-3"></span>
+                        <span className="eq-bar bar-4"></span>
+                    </div>
+                ) : (
+                    <VolumeX className="text-gray-500" />
+                )}
             </button>
 
             {/* Main Content */}

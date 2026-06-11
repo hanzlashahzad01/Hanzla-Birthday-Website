@@ -10,7 +10,8 @@ const CreateWish = () => {
         relation: 'Friend',
         theme: 'party',
         message: '',
-        sender: ''
+        sender: '',
+        images: []
     });
 
     const relations = ['Friend', 'Sister', 'Brother', 'Cousin', 'Mom', 'Dad', 'Phopu', 'Chahu', 'Mamu', 'Khala', 'Special One'];
@@ -37,6 +38,39 @@ const CreateWish = () => {
         if (e.target.name === 'theme') {
             document.body.setAttribute('data-theme', e.target.value);
         }
+    };
+
+    const handleImageUpload = (e) => {
+        const files = Array.from(e.target.files);
+        const currentCount = formData.images.length;
+        
+        if (currentCount + files.length > 3) {
+            alert(`You can only upload up to 3 images in total! You already have ${currentCount} and tried to select ${files.length}.`);
+            return;
+        }
+
+        const imagePromises = files.map(file => {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.readAsDataURL(file);
+            });
+        });
+
+        Promise.all(imagePromises).then(newImages => {
+            setFormData(prev => ({ 
+                ...prev, 
+                images: [...prev.images, ...newImages] 
+            }));
+            e.target.value = ''; // Reset input to allow uploading same file again
+        });
+    };
+
+    const removeImage = (index) => {
+        setFormData(prev => ({
+            ...prev,
+            images: prev.images.filter((_, i) => i !== index)
+        }));
     };
 
     const generateLink = (e) => {
@@ -107,13 +141,53 @@ const CreateWish = () => {
                                         // Preview Music Change
                                         window.dispatchEvent(new CustomEvent('change-theme', { detail: t }));
                                     }}
-                                    className={`px-4 py-2 text-sm rounded-full border-2 ${formData.theme === t ? 'border-blue-500 bg-white/20' : 'border-transparent bg-gray-100/10'}`}
+                                    className={`theme-select-btn ${formData.theme === t ? 'active' : ''}`}
                                     style={{ textTransform: 'capitalize' }}
                                 >
                                     {t}
                                 </button>
                             ))}
                         </div>
+                    </div>
+
+                    <div className="input-group">
+                        <label className="flex justify-between items-center w-full" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span>Add Photos (Optional)</span>
+                            <span className="text-sm opacity-80" style={{ fontSize: '0.85rem' }}>{formData.images.length}/3 uploaded</span>
+                        </label>
+                        {formData.images.length < 3 ? (
+                            <input
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                onChange={handleImageUpload}
+                                className="input-field"
+                            />
+                        ) : (
+                            <div className="input-field bg-gray-100/10 text-center text-sm py-4 border-dashed border-2 opacity-75" style={{ textAlign: 'center', fontSize: '0.9rem', opacity: 0.8, padding: '1rem', borderStyle: 'dashed' }}>
+                                Limit reached! Remove an image to upload a different one. ✨
+                            </div>
+                        )}
+                        {formData.images.length > 0 && (
+                            <div className="image-preview-container">
+                                {formData.images.map((img, index) => (
+                                    <div key={index} className="image-preview-item">
+                                        <img
+                                            src={img}
+                                            alt={`Preview ${index + 1}`}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => removeImage(index)}
+                                            className="image-preview-delete"
+                                            title="Remove image"
+                                        >
+                                            ×
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
 
                     <div className="input-group">
@@ -139,7 +213,7 @@ const CreateWish = () => {
                         />
                     </div>
 
-                    <button type="submit" className="w-full mt-6 flex items-center justify-center gap-2 transform active:scale-95 transition-transform">
+                    <button type="submit" className="submit-btn">
                         <Gift size={20} /> Generate Birthday Wish
                     </button>
                 </form>

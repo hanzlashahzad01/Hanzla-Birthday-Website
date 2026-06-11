@@ -11,6 +11,7 @@ const ViewWish = () => {
     const [countdown, setCountdown] = useState(null);
     const [showShareModal, setShowShareModal] = useState(false);
     const [error, setError] = useState(null);
+    const [isOpening, setIsOpening] = useState(false);
 
     useEffect(() => {
         try {
@@ -63,22 +64,29 @@ const ViewWish = () => {
         }());
     };
 
-    const triggerSurpriseInteraction = () => {
+    const handleGiftClick = () => {
+        if (isOpening) return;
+        setIsOpening(true);
+
         window.dispatchEvent(new Event('start-music'));
 
-        setCountdown(3);
-        let count = 3;
-        const timer = setInterval(() => {
-            count--;
-            if (count > 0) {
-                setCountdown(count);
-            } else {
-                clearInterval(timer);
-                setCountdown(null);
-                setShowSurprise(true);
-                triggerFireworks();
-            }
-        }, 1000);
+        // Shaking and untying animation lasts 800ms before countdown starts
+        setTimeout(() => {
+            setCountdown(3);
+            let count = 3;
+            const timer = setInterval(() => {
+                count--;
+                if (count > 0) {
+                    setCountdown(count);
+                } else {
+                    clearInterval(timer);
+                    setCountdown(null);
+                    setShowSurprise(true);
+                    setIsOpening(false);
+                    triggerFireworks();
+                }
+            }, 1000);
+        }, 800);
     };
 
     const triggerFireworks = () => {
@@ -155,27 +163,29 @@ const ViewWish = () => {
                 </div>
             )}
 
-            <div className="fixed bottom-6 right-6 z-40">
-                <button
-                    onClick={handleShare}
-                    className="p-4 bg-white/90 text-gray-800 rounded-full shadow-lg hover:scale-110 transition-transform font-bold flex items-center gap-2"
-                    aria-label="Share Wish"
-                >
-                    🔗 Share / WhatsApp
-                </button>
-            </div>
+            <button
+                onClick={handleShare}
+                className="share-fab"
+                aria-label="Share Wish"
+            >
+                🔗 Share / WhatsApp
+            </button>
 
             {!showSurprise ? (
-                <div className="card text-center float-anim">
-                    <h2 className="text-2xl font-semibold mb-6 flex items-center justify-center gap-2 text-gray-700 dark:text-gray-200">
-                        <Sparkles className="text-yellow-400" /> A Special Wish For You <Sparkles className="text-yellow-400" />
+                <div className="gift-box-container float-anim">
+                    <h2 className="gift-box-title">
+                        <Sparkles className="text-yellow-400 animate-pulse" /> Tap the Gift to Open <Sparkles className="text-yellow-400 animate-pulse" />
                     </h2>
-                    <button
-                        onClick={triggerSurpriseInteraction}
-                        className="text-xl px-8 py-4 bg-gradient-to-r from-pink-500 to-violet-500 hover:from-pink-600 hover:to-violet-600 text-white transform transition-all hover:scale-105 shadow-xl rounded-full"
+                    <div 
+                        className={`gift-box ${isOpening ? 'opening' : ''}`}
+                        onClick={handleGiftClick}
+                        title="Click to open your surprise!"
                     >
-                        🎁 Tap for Surprise
-                    </button>
+                        <div className="gift-bow"></div>
+                        <div className="gift-lid"></div>
+                        <div className="gift-ribbon-v"></div>
+                        <div className="gift-ribbon-h"></div>
+                    </div>
                 </div>
             ) : (
                 <div className="card text-center animate-fade-in space-y-6 max-w-2xl mx-auto">
@@ -187,6 +197,28 @@ const ViewWish = () => {
                     <p className="text-xl md:text-2xl leading-relaxed opacity-90 font-medium whitespace-pre-line">
                         {data.message || getDefaultMessage(data.relation)}
                     </p>
+
+                    {data.images && data.images.length > 0 && (
+                        <div className="memories-container">
+                            <h3 className="memories-title">📸 Memories</h3>
+                            <div className={`memories-grid count-${data.images.length}`}>
+                                {data.images.map((img, index) => (
+                                    <div 
+                                        key={index} 
+                                        className="memory-card"
+                                        onClick={() => window.open(img, '_blank')}
+                                        title="Click to view full image"
+                                    >
+                                        <img
+                                            src={img}
+                                            alt={`Memory ${index + 1}`}
+                                            loading="lazy"
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
                     {data.sender && (
                         <div className="mt-8 pt-6 border-t border-gray-200/20">
