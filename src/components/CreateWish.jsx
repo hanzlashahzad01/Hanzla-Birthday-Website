@@ -13,6 +13,7 @@ const CreateWish = () => {
         sender: '',
         images: []
     });
+    const [isGenerating, setIsGenerating] = useState(false);
 
     const relations = ['Friend', 'Sister', 'Brother', 'Cousin', 'Mom', 'Dad', 'Phopu', 'Chahu', 'Mamu', 'Khala', 'Special One'];
 
@@ -102,22 +103,69 @@ const CreateWish = () => {
         }));
     };
 
-    const generateLink = (e) => {
+    const uploadImage = async (base64Image) => {
+        if (base64Image.startsWith('http')) {
+            return base64Image;
+        }
+
+        const response = await fetch('/api/upload', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ image: base64Image })
+        });
+
+        if (!response.ok) {
+            let errMsg = 'Failed to upload image';
+            try {
+                const err = await response.json();
+                errMsg = err.error || errMsg;
+            } catch (e) {
+                try {
+                    const txt = await response.text();
+                    errMsg = txt || errMsg;
+                } catch (e2) {}
+            }
+            throw new Error(errMsg);
+        }
+
+        const data = await response.json();
+        return data.url;
+    };
+
+    const generateLink = async (e) => {
         e.preventDefault();
-        console.log("Generating wish for:", formData);
 
         if (!formData.name) {
             alert("Please enter a name!");
             return;
         }
 
-        const encoded = encodeWish(formData);
-        console.log("Encoded data:", encoded);
+        setIsGenerating(true);
 
-        if (encoded) {
-            navigate(`/wish?data=${encoded}`);
-        } else {
-            alert("Something went wrong generating the wish. Please try again with different text.");
+        try {
+            // Upload all base64 images to CDN
+            const uploadedUrls = await Promise.all(
+                formData.images.map(img => uploadImage(img))
+            );
+
+            const finalWishData = {
+                ...formData,
+                images: uploadedUrls
+            };
+
+            const encoded = encodeWish(finalWishData);
+            if (encoded) {
+                navigate(`/wish?data=${encoded}`);
+            } else {
+                throw new Error("Failed to encode wish data.");
+            }
+        } catch (err) {
+            console.error(err);
+            alert("Upload failed: " + err.message);
+        } finally {
+            setIsGenerating(false);
         }
     };
 
@@ -242,8 +290,8 @@ const CreateWish = () => {
                         />
                     </div>
 
-                    <button type="submit" className="submit-btn">
-                        <Gift size={20} /> Generate Birthday Wish
+                    <button type="submit" className="submit-btn" disabled={isGenerating} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', opacity: isGenerating ? 0.7 : 1 }}>
+                        {isGenerating ? 'Uploading photos...' : <><Gift size={20} /> Generate Birthday Wish</>}
                     </button>
                 </form>
             </div>

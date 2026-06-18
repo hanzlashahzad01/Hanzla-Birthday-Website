@@ -107,17 +107,13 @@ const ViewWish = () => {
 
     const handleShare = async () => {
         const url = window.location.href;
-        const text = `A special birthday wish for ${data.name}! 🎂`;
-        const shareData = {
-            title: 'Birthday Magic ✨',
-            text: text,
-            url: url
-        };
-
+        
         // 1. Try Native Share (Mobile Apps)
         if (navigator.share && /mobile/i.test(navigator.userAgent)) {
             try {
-                await navigator.share(shareData);
+                await navigator.share({
+                    url: url
+                });
                 return;
             } catch (err) {
                 console.log('Native share failed/cancelled', err);
@@ -125,8 +121,7 @@ const ViewWish = () => {
         }
 
         // 2. Fallback: One-Click WhatsApp (Desktop/Fallback)
-        // User requested "One click open", no copy paste.
-        const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(`${text}\n${url}`)}`;
+        const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(url)}`;
         window.open(whatsappUrl, '_blank');
     };
 
