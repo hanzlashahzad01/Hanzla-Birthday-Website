@@ -32,33 +32,54 @@ export default defineConfig({
                 res.end(JSON.stringify({ error: 'Invalid image data format' }));
                 return;
               }
-              const mimeType = parts[0].split(':')[1];
               const rawBase64 = parts[1];
-              const buffer = Buffer.from(rawBase64, 'base64');
 
-              const blob = new Blob([buffer], { type: mimeType });
-              const formData = new FormData();
-              formData.append('reqtype', 'fileupload');
-              formData.append('fileToUpload', blob, 'image.jpg');
+              // Use ImgBB (same as production)
+              const IMGBB_API_KEY = process.env.IMGBB_API_KEY || process.env.VITE_IMGBB_API_KEY;
+              
+              if (!IMGBB_API_KEY) {
+                // Fallback to Catbox for local dev if no key set
+                const mimeType = parts[0].split(':')[1];
+                const buffer = Buffer.from(rawBase64, 'base64');
+                const blob = new Blob([buffer], { type: mimeType });
+                const formData = new FormData();
+                formData.append('reqtype', 'fileupload');
+                formData.append('fileToUpload', blob, 'image.jpg');
 
-              const response = await fetch('https://catbox.moe/user/api.php', {
-                method: 'POST',
-                body: formData,
-              });
+                const response = await fetch('https://catbox.moe/user/api.php', {
+                  method: 'POST',
+                  body: formData,
+                });
 
-              if (!response.ok) {
-                const errorText = await response.text();
-                console.error('Catbox upload failed in dev proxy:', errorText);
-                res.statusCode = response.status;
+                if (!response.ok) {
+                  throw new Error(`Catbox status ${response.status}`);
+                }
+                const fileUrl = await response.text();
+                res.statusCode = 200;
                 res.setHeader('Content-Type', 'application/json');
-                res.end(JSON.stringify({ error: 'Failed to upload to Catbox' }));
+                res.end(JSON.stringify({ url: fileUrl.trim() }));
                 return;
               }
 
-              const fileUrl = await response.text();
+              const formData = new URLSearchParams();
+              formData.append('key', IMGBB_API_KEY);
+              formData.append('image', rawBase64);
+
+              const response = await fetch('https://api.imgbb.com/1/upload', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: formData.toString(),
+              });
+
+              const result = await response.json();
+              if (!response.ok || !result.success) {
+                throw new Error(result.error?.message || 'ImgBB upload failed');
+              }
+
               res.statusCode = 200;
               res.setHeader('Content-Type', 'application/json');
-              res.end(JSON.stringify({ url: fileUrl.trim() }));
+              res.end(JSON.stringify({ url: result.data.url }));
+
             } catch (error) {
               console.error('Dev upload proxy error:', error);
               res.statusCode = 500;
