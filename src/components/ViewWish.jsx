@@ -107,27 +107,37 @@ const ViewWish = () => {
 
     const handleShare = async () => {
         const url = window.location.href;
-        
-        // 1. Try Native Share (Mobile Apps)
-        if (navigator.share && /mobile/i.test(navigator.userAgent)) {
+        const msg = `🎂 Birthday wish for ${data?.name || 'someone special'}! Tap to open a special surprise 🎁: ${url}`;
+
+        // 1. Try Native Share (Mobile)
+        if (navigator.share) {
             try {
-                await navigator.share({
-                    url: url
-                });
+                await navigator.share({ title: `Birthday Wish 🎂`, text: msg, url });
                 return;
             } catch (err) {
-                console.log('Native share failed/cancelled', err);
+                // User cancelled or not supported
+                if (err.name === 'AbortError') return;
             }
         }
 
-        // 2. Fallback: One-Click WhatsApp (Desktop/Fallback)
-        const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(url)}`;
+        // 2. Fallback: WhatsApp direct
+        const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(msg)}`;
         window.open(whatsappUrl, '_blank');
     };
 
     const copyLink = () => {
-        navigator.clipboard.writeText(window.location.href);
-        alert("Link copied! Ready to paste. 📋");
+        navigator.clipboard.writeText(window.location.href).then(() => {
+            alert("Link copied! Now paste it anywhere 📋");
+        }).catch(() => {
+            // Fallback
+            const el = document.createElement('textarea');
+            el.value = window.location.href;
+            document.body.appendChild(el);
+            el.select();
+            document.execCommand('copy');
+            document.body.removeChild(el);
+            alert("Link copied! 📋");
+        });
     };
 
     const getDefaultMessage = (relation) => {
@@ -158,13 +168,23 @@ const ViewWish = () => {
                 </div>
             )}
 
-            <button
-                onClick={handleShare}
-                className="share-fab"
-                aria-label="Share Wish"
-            >
-                🔗 Share / WhatsApp
-            </button>
+            <div style={{ position: 'fixed', bottom: '1.5rem', right: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.6rem', zIndex: 99 }}>
+                <button
+                    onClick={copyLink}
+                    style={{ fontSize: '0.85rem', padding: '0.65rem 1.1rem', borderRadius: '9999px', background: 'rgba(30,30,30,0.75)', color: '#fff', border: '1px solid rgba(255,255,255,0.25)', backdropFilter: 'blur(8px)', boxShadow: '0 6px 18px rgba(0,0,0,0.25)', display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontWeight: 600 }}
+                    aria-label="Copy Link"
+                >
+                    📋 Copy Link
+                </button>
+                <button
+                    onClick={handleShare}
+                    className="share-fab"
+                    aria-label="Share Wish"
+                    style={{ position: 'relative', bottom: 'auto', right: 'auto' }}
+                >
+                    🔗 Share / WhatsApp
+                </button>
+            </div>
 
             {!showSurprise ? (
                 <div className="gift-box-container float-anim">

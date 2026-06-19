@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { encodeWish } from '../utils/wishEncoder';
-import { Gift, Heart } from 'lucide-react';
+import { Gift, Heart, Copy, Share2, ExternalLink } from 'lucide-react';
 
 const CreateWish = () => {
     const navigate = useNavigate();
@@ -14,6 +14,8 @@ const CreateWish = () => {
         images: []
     });
     const [isGenerating, setIsGenerating] = useState(false);
+    const [generatedLink, setGeneratedLink] = useState(null);
+    const [copied, setCopied] = useState(false);
 
     const relations = ['Friend', 'Sister', 'Brother', 'Cousin', 'Mom', 'Dad', 'Phopu', 'Chahu', 'Mamu', 'Khala', 'Special One'];
 
@@ -143,6 +145,7 @@ const CreateWish = () => {
         }
 
         setIsGenerating(true);
+        setGeneratedLink(null);
 
         try {
             // Upload all base64 images to CDN
@@ -157,7 +160,8 @@ const CreateWish = () => {
 
             const encoded = encodeWish(finalWishData);
             if (encoded) {
-                navigate(`/wish?data=${encoded}`);
+                const link = `${window.location.origin}/wish?data=${encoded}`;
+                setGeneratedLink(link);
             } else {
                 throw new Error("Failed to encode wish data.");
             }
@@ -167,6 +171,26 @@ const CreateWish = () => {
         } finally {
             setIsGenerating(false);
         }
+    };
+
+    const copyLink = () => {
+        if (!generatedLink) return;
+        navigator.clipboard.writeText(generatedLink).then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2500);
+        });
+    };
+
+    const shareOnWhatsApp = () => {
+        if (!generatedLink) return;
+        const msg = `🎂 Birthday wish for ${formData.name}! Open this link to see a special surprise: ${generatedLink}`;
+        const waUrl = `https://wa.me/?text=${encodeURIComponent(msg)}`;
+        window.open(waUrl, '_blank');
+    };
+
+    const openLink = () => {
+        if (!generatedLink) return;
+        window.open(generatedLink, '_blank');
     };
 
     // Initial theme set
@@ -291,9 +315,33 @@ const CreateWish = () => {
                     </div>
 
                     <button type="submit" className="submit-btn" disabled={isGenerating} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', opacity: isGenerating ? 0.7 : 1 }}>
-                        {isGenerating ? 'Uploading photos...' : <><Gift size={20} /> Generate Birthday Wish</>}
+                        {isGenerating ? (
+                            <><span className="spinner" style={{ width: 18, height: 18, border: '3px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.8s linear infinite' }}></span> Uploading photos...</>
+                        ) : (
+                            <><Gift size={20} /> Generate Birthday Wish</>
+                        )}
                     </button>
                 </form>
+
+                {generatedLink && (
+                    <div className="generated-link-panel" style={{ marginTop: '1.5rem', padding: '1.2rem 1rem', borderRadius: '1rem', background: 'rgba(255,255,255,0.12)', border: '1.5px solid rgba(255,255,255,0.25)', backdropFilter: 'blur(8px)' }}>
+                        <p style={{ fontWeight: 700, fontSize: '1rem', marginBottom: '0.6rem', opacity: 0.9 }}>🎉 Link Ready! Share it:</p>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(0,0,0,0.15)', borderRadius: '0.6rem', padding: '0.5rem 0.7rem', marginBottom: '0.9rem', wordBreak: 'break-all', fontSize: '0.78rem', opacity: 0.85 }}>
+                            <span style={{ flex: 1 }}>{generatedLink}</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+                            <button onClick={openLink} style={{ flex: 1, minWidth: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', padding: '0.6rem 1rem', borderRadius: '0.6rem', border: 'none', cursor: 'pointer', background: 'rgba(255,255,255,0.2)', color: 'inherit', fontWeight: 600, fontSize: '0.85rem' }}>
+                                <ExternalLink size={15} /> Preview
+                            </button>
+                            <button onClick={copyLink} style={{ flex: 1, minWidth: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', padding: '0.6rem 1rem', borderRadius: '0.6rem', border: 'none', cursor: 'pointer', background: copied ? 'rgba(34,197,94,0.35)' : 'rgba(255,255,255,0.2)', color: 'inherit', fontWeight: 600, fontSize: '0.85rem', transition: 'background 0.3s' }}>
+                                <Copy size={15} /> {copied ? 'Copied! ✓' : 'Copy Link'}
+                            </button>
+                            <button onClick={shareOnWhatsApp} style={{ flex: 1, minWidth: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', padding: '0.6rem 1rem', borderRadius: '0.6rem', border: 'none', cursor: 'pointer', background: 'linear-gradient(135deg, #25D366, #128C7E)', color: '#fff', fontWeight: 700, fontSize: '0.85rem' }}>
+                                <Share2 size={15} /> WhatsApp
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
