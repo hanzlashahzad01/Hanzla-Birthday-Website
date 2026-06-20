@@ -1,10 +1,41 @@
 import React, { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useParams } from 'react-router-dom';
 import { decodeWish } from '../utils/wishEncoder';
+import { fetchWish } from '../utils/wishStorage';
+import { buildWhatsAppShareUrlSafe } from '../utils/shareHelpers';
 import confetti from 'canvas-confetti';
 import { Sparkles } from 'lucide-react';
 
+const MemoryImage = ({ src, index }) => {
+    const [failed, setFailed] = useState(false);
+
+    if (failed) {
+        return (
+            <div className="memory-card memory-card-fallback">
+                <span>📷 Photo {index + 1}</span>
+            </div>
+        );
+    }
+
+    return (
+        <div
+            className="memory-card"
+            onClick={() => window.open(src, '_blank')}
+            title="Click to view full image"
+        >
+            <img
+                src={src}
+                alt={`Memory ${index + 1}`}
+                loading="lazy"
+                referrerPolicy="no-referrer"
+                onError={() => setFailed(true)}
+            />
+        </div>
+    );
+};
+
 const ViewWish = () => {
+    const { id } = useParams();
     const [searchParams] = useSearchParams();
     const [data, setData] = useState(null);
     const [showSurprise, setShowSurprise] = useState(false);
@@ -14,31 +45,39 @@ const ViewWish = () => {
     const [isOpening, setIsOpening] = useState(false);
 
     useEffect(() => {
-        try {
-            const encoded = searchParams.get('data');
-            console.log("Encoded param:", encoded);
-            if (encoded) {
-                const decoded = decodeWish(encoded);
-                console.log("Decoded data:", decoded);
-                if (decoded) {
+        const loadWish = async () => {
+            try {
+                if (id) {
+                    const decoded = await fetchWish(id);
                     setData(decoded);
                     document.body.setAttribute('data-theme', decoded.theme);
-                    // Dispatch event to change music
                     window.dispatchEvent(new CustomEvent('change-theme', { detail: decoded.theme }));
-
-                    // Soft confetti
                     triggerSoftConfetti();
-                } else {
-                    setError("Failed to decode wish data.");
+                    return;
                 }
-            } else {
-                setError("No wish data found in URL.");
+
+                const encoded = searchParams.get('data');
+                if (encoded) {
+                    const decoded = decodeWish(encoded);
+                    if (decoded) {
+                        setData(decoded);
+                        document.body.setAttribute('data-theme', decoded.theme);
+                        window.dispatchEvent(new CustomEvent('change-theme', { detail: decoded.theme }));
+                        triggerSoftConfetti();
+                    } else {
+                        setError("Failed to decode wish data.");
+                    }
+                } else {
+                    setError("No wish data found in URL.");
+                }
+            } catch (e) {
+                console.error("Error in ViewWish effect:", e);
+                setError(e.message);
             }
-        } catch (e) {
-            console.error("Error in ViewWish effect:", e);
-            setError(e.message);
-        }
-    }, [searchParams]);
+        };
+
+        loadWish();
+    }, [id, searchParams]);
 
     const triggerSoftConfetti = () => {
         const duration = 2000;
@@ -105,24 +144,9 @@ const ViewWish = () => {
         }, 250);
     };
 
-    const handleShare = async () => {
+    const handleShare = () => {
         const url = window.location.href;
-        const msg = `🎂 Birthday wish for ${data?.name || 'someone special'}! Tap to open a special surprise 🎁: ${url}`;
-
-        // 1. Try Native Share (Mobile)
-        if (navigator.share) {
-            try {
-                await navigator.share({ title: `Birthday Wish 🎂`, text: msg, url });
-                return;
-            } catch (err) {
-                // User cancelled or not supported
-                if (err.name === 'AbortError') return;
-            }
-        }
-
-        // 2. Fallback: WhatsApp direct
-        const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(msg)}`;
-        window.open(whatsappUrl, '_blank');
+        window.open(buildWhatsAppShareUrlSafe(url, data?.name || 'someone special'), '_blank');
     };
 
     const copyLink = () => {
@@ -218,18 +242,7 @@ const ViewWish = () => {
                             <h3 className="memories-title">📸 Memories</h3>
                             <div className={`memories-grid count-${data.images.length}`}>
                                 {data.images.map((img, index) => (
-                                    <div 
-                                        key={index} 
-                                        className="memory-card"
-                                        onClick={() => window.open(img, '_blank')}
-                                        title="Click to view full image"
-                                    >
-                                        <img
-                                            src={img}
-                                            alt={`Memory ${index + 1}`}
-                                            loading="lazy"
-                                        />
-                                    </div>
+                                    <MemoryImage key={index} src={img} index={index} />
                                 ))}
                             </div>
                         </div>

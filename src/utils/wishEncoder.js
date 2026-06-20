@@ -15,6 +15,11 @@ export const encodeWish = (data) => {
   }
 };
 
+export const buildWishLink = (id) => {
+  if (!id) return null;
+  return `${window.location.origin}/wish/${id}`;
+};
+
 export const decodeWish = (encoded) => {
   try {
     if (!encoded) return null;

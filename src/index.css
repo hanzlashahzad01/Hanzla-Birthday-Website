@@ -407,6 +407,20 @@ button:active {
   display: block;
 }
 
+.memory-card-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
+  font-size: 1rem;
+  font-weight: 600;
+  opacity: 0.7;
+}
+
+.memory-card-fallback:hover {
+  transform: none;
+}
+
 /* Theme Selector Buttons */
 .theme-select-btn {
   background: rgba(255, 255, 255, 0.08);

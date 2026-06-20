@@ -19,79 +19,110 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'No image data provided' });
     }
 
-    // Parse base64 — strip the data:image/...;base64, prefix
     const parts = image.split(';base64,');
     if (parts.length < 2) {
       return res.status(400).json({ error: 'Invalid image data format' });
     }
     const mimeType = parts[0].split(':')[1] || 'image/jpeg';
     const rawBase64 = parts[1];
+    const fileBuffer = Buffer.from(rawBase64, 'base64');
+    const ext = mimeType.split('/')[1]?.split('+')[0] || 'jpg';
+    const filename = `photo.${ext}`;
 
-    // Try ImgBB first if API key is available
+    const HEADERS = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36',
+      'Accept': '*/*',
+    };
+
+    function buildMultipart(fields, fileField) {
+      const boundary = '----UploadBoundary' + Date.now();
+      const parts = [];
+      for (const [name, val] of Object.entries(fields)) {
+        parts.push(Buffer.from(
+          `--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${val}\r\n`,
+          'utf8'
+        ));
+      }
+      parts.push(Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="${fileField}"; filename="${filename}"\r\nContent-Type: ${mimeType}\r\n\r\n`,
+        'utf8'
+      ));
+      parts.push(fileBuffer);
+      parts.push(Buffer.from(`\r\n--${boundary}--\r\n`, 'utf8'));
+      const body = Buffer.concat(parts);
+      return { body, contentType: `multipart/form-data; boundary=${boundary}` };
+    }
+
+    // 1. Try ImgBB (permanent, if API key set)
     const IMGBB_API_KEY = process.env.IMGBB_API_KEY;
     if (IMGBB_API_KEY) {
       try {
-        const formData = new URLSearchParams();
-        formData.append('key', IMGBB_API_KEY);
-        formData.append('image', rawBase64);
-
-        const response = await fetch('https://api.imgbb.com/1/upload', {
+        const form = new URLSearchParams();
+        form.append('key', IMGBB_API_KEY);
+        form.append('image', rawBase64);
+        const r = await fetch('https://api.imgbb.com/1/upload', {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: formData.toString(),
+          body: form.toString(),
         });
-
-        const result = await response.json();
-        if (response.ok && result.success) {
-          console.log('ImgBB upload success:', result.data.url);
-          return res.status(200).json({ url: result.data.url });
+        const j = await r.json();
+        if (r.ok && j.success) {
+          console.log('ImgBB success:', j.data.url);
+          return res.status(200).json({ url: j.data.url });
         }
-        console.warn('ImgBB failed, falling back to Catbox:', result);
-      } catch (imgbbErr) {
-        console.warn('ImgBB error, falling back to Catbox:', imgbbErr.message);
+        console.warn('ImgBB failed:', j);
+      } catch (e) { console.warn('ImgBB error:', e.message); }
+    }
+
+    // 2. Try Catbox (permanent storage)
+    try {
+      const { body, contentType } = buildMultipart({ reqtype: 'fileupload' }, 'fileToUpload');
+      const r = await fetch('https://catbox.moe/user/api.php', {
+        method: 'POST',
+        headers: { 'Content-Type': contentType, ...HEADERS },
+        body,
+      });
+      const text = (await r.text()).trim();
+      if (text.startsWith('https://')) {
+        console.log('Catbox success:', text);
+        return res.status(200).json({ url: text });
       }
-    }
+      console.warn('Catbox failed, status:', r.status, 'body:', text.substring(0, 80));
+    } catch (e) { console.warn('Catbox error:', e.message); }
 
-    // Fallback: Upload to Catbox using manually constructed multipart body
-    // (Native FormData/Blob has bugs in some Vercel Node runtimes, so we build it manually)
-    const fileBuffer = Buffer.from(rawBase64, 'base64');
-    const boundary = '----FormBoundary' + Math.random().toString(36).substring(2);
+    // 3. Try Litterbox (72 hour temporary — good enough for birthday wishes)
+    try {
+      const { body, contentType } = buildMultipart({ reqtype: 'fileupload', time: '72h' }, 'fileToUpload');
+      const r = await fetch('https://litterbox.catbox.moe/resources/internals/api.php', {
+        method: 'POST',
+        headers: { 'Content-Type': contentType, ...HEADERS },
+        body,
+      });
+      const text = (await r.text()).trim();
+      if (text.startsWith('https://')) {
+        console.log('Litterbox success:', text);
+        return res.status(200).json({ url: text });
+      }
+      console.warn('Litterbox failed, status:', r.status, 'body:', text.substring(0, 80));
+    } catch (e) { console.warn('Litterbox error:', e.message); }
 
-    const ext = mimeType.split('/')[1]?.split('+')[0] || 'jpg';
-    const filename = `image.${ext}`;
+    // 4. Try 0x0.st (simple file host)
+    try {
+      const { body, contentType } = buildMultipart({}, 'file');
+      const r = await fetch('https://0x0.st', {
+        method: 'POST',
+        headers: { 'Content-Type': contentType, ...HEADERS },
+        body,
+      });
+      const text = (await r.text()).trim();
+      if (text.startsWith('https://')) {
+        console.log('0x0.st success:', text);
+        return res.status(200).json({ url: text });
+      }
+      console.warn('0x0.st failed, status:', r.status, 'body:', text.substring(0, 80));
+    } catch (e) { console.warn('0x0.st error:', e.message); }
 
-    const part1 = Buffer.from(
-      `--${boundary}\r\n` +
-      `Content-Disposition: form-data; name="reqtype"\r\n\r\n` +
-      `fileupload\r\n` +
-      `--${boundary}\r\n` +
-      `Content-Disposition: form-data; name="fileToUpload"; filename="${filename}"\r\n` +
-      `Content-Type: ${mimeType}\r\n\r\n`,
-      'utf-8'
-    );
-    const part2 = Buffer.from(`\r\n--${boundary}--\r\n`, 'utf-8');
-    const bodyBuffer = Buffer.concat([part1, fileBuffer, part2]);
-
-    const catboxRes = await fetch('https://catbox.moe/user/api.php', {
-      method: 'POST',
-      headers: {
-        'Content-Type': `multipart/form-data; boundary=${boundary}`,
-        'Content-Length': bodyBuffer.length,
-      },
-      body: bodyBuffer,
-    });
-
-    if (!catboxRes.ok) {
-      throw new Error(`Catbox returned status ${catboxRes.status}`);
-    }
-
-    const fileUrl = (await catboxRes.text()).trim();
-    if (!fileUrl.startsWith('http')) {
-      throw new Error('Catbox returned invalid URL: ' + fileUrl);
-    }
-
-    console.log('Catbox upload success:', fileUrl);
-    return res.status(200).json({ url: fileUrl });
+    return res.status(500).json({ error: 'All upload services failed. Please try again.' });
 
   } catch (error) {
     console.error('Upload handler error:', error);

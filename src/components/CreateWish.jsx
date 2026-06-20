@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { encodeWish } from '../utils/wishEncoder';
+import { saveWish } from '../utils/wishStorage';
+import { uploadImages } from '../utils/imageUpload';
+import { buildWhatsAppShareUrlSafe } from '../utils/shareHelpers';
 import { Gift, Heart, Copy, Share2, ExternalLink } from 'lucide-react';
 
 const CreateWish = () => {
@@ -52,7 +54,7 @@ const CreateWish = () => {
                     const canvas = document.createElement('canvas');
                     let width = img.width;
                     let height = img.height;
-                    const max_size = 500; // Resize to max 500px
+                    const max_size = 400; // Resize to max 400px for smaller uploads
 
                     if (width > height) {
                         if (width > max_size) {
@@ -70,7 +72,7 @@ const CreateWish = () => {
                     canvas.height = height;
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, width, height);
-                    resolve(canvas.toDataURL('image/jpeg', 0.6)); // Compressed JPEG
+                    resolve(canvas.toDataURL('image/jpeg', 0.5)); // Compressed JPEG
                 };
                 img.src = e.target.result;
             };
@@ -105,36 +107,6 @@ const CreateWish = () => {
         }));
     };
 
-    const uploadImage = async (base64Image) => {
-        if (base64Image.startsWith('http')) {
-            return base64Image;
-        }
-
-        const response = await fetch('/api/upload', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ image: base64Image })
-        });
-
-        if (!response.ok) {
-            let errMsg = 'Failed to upload image';
-            try {
-                const err = await response.json();
-                errMsg = err.error || errMsg;
-            } catch (e) {
-                try {
-                    const txt = await response.text();
-                    errMsg = txt || errMsg;
-                } catch (e2) {}
-            }
-            throw new Error(errMsg);
-        }
-
-        const data = await response.json();
-        return data.url;
-    };
 
     const generateLink = async (e) => {
         e.preventDefault();
@@ -148,26 +120,27 @@ const CreateWish = () => {
         setGeneratedLink(null);
 
         try {
-            // Upload all base64 images to CDN
-            const uploadedUrls = await Promise.all(
-                formData.images.map(img => uploadImage(img))
-            );
+            let finalImages = formData.images;
+
+            if (formData.images.length > 0) {
+                try {
+                    finalImages = await uploadImages(formData.images);
+                } catch (uploadErr) {
+                    console.warn('CDN upload failed, saving photos with wish:', uploadErr.message);
+                    finalImages = formData.images;
+                }
+            }
 
             const finalWishData = {
                 ...formData,
-                images: uploadedUrls
+                images: finalImages
             };
 
-            const encoded = encodeWish(finalWishData);
-            if (encoded) {
-                const link = `${window.location.origin}/wish?data=${encoded}`;
-                setGeneratedLink(link);
-            } else {
-                throw new Error("Failed to encode wish data.");
-            }
+            const { link } = await saveWish(finalWishData);
+            setGeneratedLink(link);
         } catch (err) {
             console.error(err);
-            alert("Upload failed: " + err.message);
+            alert("Error: " + err.message);
         } finally {
             setIsGenerating(false);
         }
@@ -183,9 +156,7 @@ const CreateWish = () => {
 
     const shareOnWhatsApp = () => {
         if (!generatedLink) return;
-        const msg = `🎂 Birthday wish for ${formData.name}! Open this link to see a special surprise: ${generatedLink}`;
-        const waUrl = `https://wa.me/?text=${encodeURIComponent(msg)}`;
-        window.open(waUrl, '_blank');
+        window.open(buildWhatsAppShareUrlSafe(generatedLink, formData.name), '_blank');
     };
 
     const openLink = () => {
@@ -316,7 +287,7 @@ const CreateWish = () => {
 
                     <button type="submit" className="submit-btn" disabled={isGenerating} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', opacity: isGenerating ? 0.7 : 1 }}>
                         {isGenerating ? (
-                            <><span className="spinner" style={{ width: 18, height: 18, border: '3px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.8s linear infinite' }}></span> Uploading photos...</>
+                            <><span className="spinner" style={{ width: 18, height: 18, border: '3px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.8s linear infinite' }}></span> {formData.images.length > 0 ? 'Uploading photos...' : 'Generating link...'}</>
                         ) : (
                             <><Gift size={20} /> Generate Birthday Wish</>
                         )}
@@ -326,7 +297,7 @@ const CreateWish = () => {
                 {generatedLink && (
                     <div className="generated-link-panel" style={{ marginTop: '1.5rem', padding: '1.2rem 1rem', borderRadius: '1rem', background: 'rgba(255,255,255,0.12)', border: '1.5px solid rgba(255,255,255,0.25)', backdropFilter: 'blur(8px)' }}>
                         <p style={{ fontWeight: 700, fontSize: '1rem', marginBottom: '0.6rem', opacity: 0.9 }}>🎉 Link Ready! Share it:</p>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(0,0,0,0.15)', borderRadius: '0.6rem', padding: '0.5rem 0.7rem', marginBottom: '0.9rem', wordBreak: 'break-all', fontSize: '0.78rem', opacity: 0.85 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(0,0,0,0.15)', borderRadius: '0.6rem', padding: '0.5rem 0.7rem', marginBottom: '0.9rem', wordBreak: 'break-all', fontSize: '0.85rem', opacity: 0.9 }}>
                             <span style={{ flex: 1 }}>{generatedLink}</span>
                         </div>
                         <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
